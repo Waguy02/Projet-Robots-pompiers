@@ -14,3 +14,110 @@ Ensimag 2A POO - TP 2018/19
 - doc: la documentation (API) des classes de l'interface graphique contenues dans gui.jar. Point d'entrée: index.html
 
 - Makefile: quelques explications sur la compilation en ligne, notamment la notion de classpath et l'utilisation de gui.jar
+
+
+
+**TPL : Simulation d&#39;une équipe de robots pompiers**
+
+**I -**  **Description des classes**
+
+**Données Simulations**. Cette classe regroupe toutes les données d&#39;une simulation : la carte, les incendies (stockées dans une HashMap &quot;incendies&quot; de clés de type Case) et les Robots dans une ArrayList.
+
+Nous avons fait le choix d&#39;une classe **Constantes** pour stocker les constantes fixées comme les chemins de fichiers de carte, la taille des cases de la Carte, la durée d&#39;une étape (en secondes), mais également le chemin pour les différentes images.
+
+Une constante &quot;RESOLUTION&quot; y est aussi définie. Elle permet de définir la taille des cases affichées à l&#39;écran en fonction du nombre de lignes et de colonnes de la carte considérée.
+
+Pour les robots, nous avons fait le choix d&#39;une classe abstraite **Robot** et de sous-classes pour chacun des types de robots. Cette classe Robot implémente d&#39;ailleurs la méthode reset de l&#39;interface **Resetable** , qui permet de replacer un Robot en sa position initiale, avec le volume initial de son réservoir d&#39;eau. Elle implémente également l&#39;interface **IGraphic** (qui déclare les méthodes getFichierImage() et getPosition()). Celle-ci permet à la méthode DrawElement du simulateur de dessiner un robot sur l&#39;interface Gui à partir de son image et de sa position. Cette interface est également implémentée par les cases et les incendies.
+
+Les diagrammes de classes exhaustifs sont disponibles [**ici**](https://drive.google.com/drive/folders/1GtuNrEquhtH4VyNsrIBmqFSayaJRtIn2?usp=sharing), et la documentation javadoc : [**ici**](https://drive.google.com/drive/folders/1uaqwm-vQi1aTFOxOIZN-QCZdioiu3qIN?usp=sharing)
+
+1.1 - Structure des évènements
+
+Nous avons également implémenté une classe abstraite **Evenement**. Cette classe, qui prend un robot en attribut, est mère des classes EvenementDeplacement, EvenementIntervention et EvenementRemplissage. Un évènement y est caractérisé par le simulateur associé, sa date, son robot, son &quot;next&quot; (évènement qui le suit et dont il permettra de calculer la date), ainsi qu&#39;un attribut verification\_feu.
+
+Attribut next : Un événement peut être donc être associé un évènement qui le suivra dans une séquence d&#39;évènements. Par exemple, si on veut matérialiser une série de n déplacements (de case en case), on créera pour cela n Instances de EvenementDeplacement telles que chaque déplacement ait pour &quot;next&quot; le déplacement qui le suit dans la séquence. Ainsi, au départ, seule la date de fin du premier déplacement sera calculée. Les dates de fin des autres seront initialisées à l&#39;infini et calculées ensuite dynamiquement à la fin des évènements qui les précèdent.
+
+Cette approche de séquences et de calcul dynamique de date de fin a été généralisée aux autres types d&#39;événements (d&#39;intervention et de remplissage).
+
+Attribut vérification feu : Cet attribut booléen est exploité par les évènements &quot;déplacement&quot; et &quot;intervention&quot;. Il permet à un tel évènement de supprimer automatiquement l&#39;intervention qui le suit (le cas échéant) lorsque l&#39;incendie sur la position courante du robot a déjà été éteint.
+
+Concernant les méthodes dans Evenement, nous avons fait le choix d&#39;une méthode **executeAndUpdateNext()** qui exécute l&#39;événement selon son type dynamique, et s&#39;il existe, ajoute l&#39;évènement suivant next dont on calcule la date (méthode abstraite **calculateDate()**)
+
+D&#39;abord l&#39;exécution des évènements est donc permise par la méthode abstraite **execute()**, réécrite dans les différentes classes filles. Le principe dépend des classes :
+
+Pour Remplissage, on met simplement le réservoir du robot à son volume de réservoir maximum.
+
+Pour Déplacement, classe fille dans laquelle on ajoute un attribut direction, on met à jour la position du robot sur la carte (lorsque la case est atteignable).
+
+.
+
+De même pour la méthode execute() de EvenementIntervention, où on extrait les données de la simulation et la position du Robot. Et comme cette position correspond en intervention à la case de l&#39;incendie à éteindre, celle-ci permet d&#39;accéder à l&#39;Incendie grâce à l&#39;association faite dans la HashMap incendies puis de diminuer le nombre d&#39;eau restants pour l&#39;éteindre.
+
+Une méthode importante de la classe évènement est la méthode abstraite **calculateDate()**. A partir d&#39;une date de référence t0, elle permet de calculer la date de fin d&#39;un évènement (date à laquelle ce dernier sera exécuté).
+
+Dans les différentes méthodes des sous-classes, on va pour ce faire calculer la durée de l&#39;évènement de déplacement/ d&#39;intervention / de remplissage à partir du volume de réservoir à remplir, de la distance de déplacement, de la vitesse du robot ou de la vitesse d&#39;intervention ou de remplissage. On divise ensuite la durée obtenue par la durée d&#39;une étape, et l&#39;arrondi à l&#39;entier supérieur nous donne alors le nombre d&#39;étapes pour que l&#39;évènement se réalise et permet donc de connaître sa date.
+
+La classe **Scénario** quant à elle matérialise une séquence d&#39;événements prédéfinie. Dans cette classe, on a alors une ArrayList de ces évènements ainsi qu&#39;une HashMap des initialisations de ces derniers (lorsqu&#39;on crée un événement, on lui associe une date infinie Long.MAX\_VALUE-1000). Cette liste d&#39;initialisation sert à sauvegarder les dates initiales des évènements, ce qui sera utile, dans le cas où on n&#39;a pas de chef pompier, si on fait un restart par la suite (sans passer par la création de nouveaux événements).
+
+Concernant la classe **Simulateur** , celle-ci a comme attribut la liste d&#39;évènements (**ListeEvenements)** à exécuter et d&#39;évènements déjà exécutés (**ListeEvenementsExecutes)**, sous forme d&#39;ArrayList et auquel on peut ajouter des évènements. Elle a également comme attribut une HashMap : **ListeInitialisationévènements** qui contient les évènements comme clé et leur date d&#39;initialisation associée. Elle implémente les méthodes next() et restart().
+
+**Méthode next**  **:**
+
+Cette méthode permet d&#39;exécuter l&#39;étape suivante du simulateur. Le principe, s&#39;il n&#39;y a pas de chef pompier :
+
+Tant que la simulation n&#39;est pas terminée, on sélectionne parmi la liste des évènements (non encore exécutés) celui qui a la date la plus faible à l&#39;aide d&#39;un parcours de **ListeEvenements.**
+
+Et si la date de cet évènement est antérieure à la date courante, on l&#39;exécute. De ce fait, on l&#39;enlève de la liste des évènements et on l&#39;ajoute à la liste des évènements déjà exécutés.
+
+On a d&#39;ailleurs fait le choix de ArrayList pour le stockage des évènements car la priorityQueue ne permettait pas de prendre en compte les mises à jour de date après l&#39;appel de la méthode calculateDate pour un évènement (pour rappel, avant cet appel, la date d&#39;un évènement est infinie).
+
+**Le principe de Restart**  **:**
+
+On réinitialise les robots, qui sont alors replacés à leur position initiale avec leur volume de réservoir de départ, ainsi que les incendies qui reprennent leur intensité de départ.
+
+S&#39;il n&#39;y a pas de chef pompier, on réinitialise les anciens événements en réinitialisant leur dates grâce à listeInitialisationEvenements, qui sert à stocker les dates d&#39;initialisation des évènements pour pouvoir recalculer le temps d&#39;exécution à l&#39;aide de calculateDate().
+
+Pour les évènements qui n&#39;ont pas de date, on leur affecte une date infinie : Cela permet une notion d&#39;ordre des évènements à exécuter dans le simulateur. En effet, ceux-ci seront alors placés à la fin de la liste d&#39;évènements qu&#39;on ajoute à un scénario. Ils ne pourront pas être exécutés tant que leur date ne sera pas calculée.
+
+Avec un chef pompier, pas besoin de stocker les états initiaux, car celui-ci génère les évènements à la volée. Et dans le cas d&#39;un chef pompier, on réinitialise ce dernier et on efface la liste des évènements ainsi que la liste des évènements déjà exécutés.
+
+**II -**  **Plus courts chemins**
+
+Nous avons également implémenté le calcul du plus court chemin entre un robot et sa destination. Pour ce faire, on a créé une classe **Graph** qui matérialise toute la carte pour robot donné. Les noeuds du graphe sont les cases de la carte et un arc existe entre deux noeuds si et seulement si le robot considéré peut atteindre chacune des cases des noeuds considérés (Graphe robot-dépendant)
+
+On prend le coût d&#39;un arc égal à la durée de temps passée sur la case de destination de ce dernier. Ce temps est en effet égal au rapport de la taille de la case sur la vitesse du robot dans cette dernière (dépendante de la nature de la case).
+
+Nous avons donc réalisé dans la classe Graph une implémentation de l&#39;algorithme de Djisktra qui calcule le plus court chemin entre un nœud de départ et un nœud de destination sous forme de successions de cases dans à parcourir à travers une succession de déplacements.
+
+**III -**  **Le ChefPompier et la Statégie**
+
+La classe **ChefPompier** matérialise un chef pompier qui prend les décisions pour un simulateur donné. Un chef pompier est caractérisé par les attributs simulateur (le Simulateur associé) et stratégie.
+
+Un simulateur possède alors un attribut chef pompier. Lorsque cet attribut est non nul, l&#39;appel de la méthode **next()** conduit à celui de la méthode **run()** du pompier.
+ Cette méthode à son tour conduit à l&#39;appel de la méthode **execute()** de son implémentation de StratégiePompier (attribut stratégie). StrategiePompier est une interface qui matérialise la stratégie d&#39;un chefPompier. Elle définit la méthode **execute** (ChefPompier chef, long date\_courante) qui permet de mettre à jour les évènements du simulateur et la méthode **reset()** qui permet de réinitialiser la stratégie lors de la réinitialisation du simulateur.
+
+Nous avons à cet effet deux implémentations de StrategiePompier:
+
+- La **stratégie triviale** (StrategieTriviale) qui consiste à choisir un incendie au hasard et à lui affecter un robot au hasard également. De plus, lorsque le réservoir d&#39;un robot se vide, ce dernier devient indisponible jusqu&#39;à la fin de la simulation.
+- La **Stratégie évoluée** (StrategieEvolved) qui consiste à choisir un robot au hasard et à lui affecter le robot le plus proche. De plus lorsque le réservoir d&#39;un robot se vide, ce dernier se rend directement au point de remplissage le plus proche (la fonction de recherche associée est implémentée dans la classe **CalculateurChemin**. Il s&#39;agit d&#39;une méthode de parcours en profondeur utilisant à chaque étape le plus court chemin jusqu&#39;à l&#39;atteinte d&#39;un point de remplissage).
+
+**IV - Tests**
+
+Nous avons réalisé 3 classes de tests correspondants aux différents cas de tests demandés par le sujet. Chacune des méthodes de test implémentées prend en paramètre le nom de la carte stocké dans le fichier _ **Constantes.Java.** _
+
+**1. La classe TestScenarios :** permet de tester les scénarios prédéfinis. Ces derniers sont implémentés dans les méthodes statiques scenario0, scenario1 et scenario2 de la classe Scenario.java
+
+1.1. La méthode **testScenario0** permet de tester le scénario suivant : _**&quot;Déplacer le 1er robot (drone) vers le nord, quatre fois de suite&quot;.**_ _Le robot se déplace effectivement de 3 cases vers le nom et ensuit le message suivant est affiché message_ _ **&quot;Erreur : le robot est sorti de la carte&quot;** _
+
+1.2. La méthode **testScenario1** permet de tester le scénario 1 décrit par le sujet. Il faut noter que les instructions de déplacement données dans le sujet pour cette méthode ne sont pas cohérentes avec la carte. Par exemple, certains déplacements ont été omis. Cette méthode a donc été modifiée pour prendre en compte cela et les actions attendues (remplir et intervention ont bien été réalisées : l&#39;incendie a disparu de l&#39;interface).
+
+1.3. La méthode **testScénario2** permet de tester la détermination des plus courts chemins par les robots de la carte. A cet effet, dans la méthode statique Scenario.scenario2 associée qui prend en paramètre une position (un entier ligne et un entier colonne), on génère les séquences de déplacements des trois premiers robots de la carte considérée vers la position correspondante). On obtient bien les résultats attendus sur l&#39;interface.
+
+**2. La classe TestStrategie1 :** Permet de tester la stratégie Triviale du chef pompier (stratégie décrite dans la section III) sur la carte considérée. Il suffit à cet effet d&#39;ajouter au simulateur un chef pompier avec un pour stratégie &quot; **StrategieTriviale&quot;.** Pour cette stratégie, on remarque que le robot à pattes, du fait de son réservoir infini, finit par éteindre tous les incendies, les autres robots ayant vidé leurs réservoirs.
+
+**3. La classe TestStrategie2 :** Permet de tester la stratégie évoluée du chef pompier (cf section III) sur la carte considérée. Il suffit à cet effet d&#39;ajouter au simulateur un chef pompier avec un pour stratégie &quot; **StrategieEvoluee&quot;.** On remarque à cet effet que quelle que soit la carte choisie, la stratégie évoluée permet d&#39;éteindre tous les incendies en beaucoup moins d&#39;étapes que la stratégie triviale.
+
+Ci-dessous les liens correspondant aux différentes captures vidéo de démonstration de ces tests :
+
+[Scénario0](https://drive.google.com/file/d/1anfnAV_qS0u6mCw8EJaIOnloyj9NF4CN/view?usp=sharing), [Scénario1](https://drive.google.com/file/d/1l49M4ujF38s4Qz14cj3BwvZqZF17t4UK/view?usp=sharing), [Scénario2](https://drive.google.com/file/d/16-tSDNwNg2LCnJaJU1h9CejAk78GH0Jz/view?usp=sharing), [StratégieTriviale](https://drive.google.com/file/d/1RSX1kN5kCGOMTsnyc_jrnuQ1iFdxIlrQ/view?usp=sharing), [StratégieEvoluée](https://drive.google.com/file/d/1s1f79piu61gZOX_p61md03Hl5f84SGaS/view?usp=sharing)
+
